@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Max Răulea — CV</title>
+  <meta name="description" content="CV of Max Răulea — MSc Computer Security student at VU Amsterdam. Low-level programming, embedded C, software testing, CTF.">
+  <meta property="og:title" content="Max Răulea — CV">
+  <meta property="og:description" content="MSc Computer Security · VU Amsterdam · low-level programming & CTF.">
+  <meta property="og:type" content="profile">
+  <meta property="og:image" content="assets/og-image.png">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/print.css" media="print">
+</head>
+<body class="plain-mode">
+  <div class="cv-actions no-print">
+    <button id="pdf-btn" class="cv-btn">Download as PDF</button>
+    <a class="cv-btn cv-btn--ghost" href="index.html">View the interactive version →</a>
+  </div>
+
+  <main id="cv" class="cv"></main>
+
+  <footer class="cv-footer no-print">
+    <p>
+      This site was built with Claude Fable 5 (Anthropic) — designed, directed and maintained by Max Răulea.
+      It is open source; the code is MIT-licensed.
+    </p>
+  </footer>
+
+  <script type="module">
+    import { renderCV } from "./js/render/plain-cv.js";
+    renderCV(document.getElementById("cv"));
+    document.getElementById("pdf-btn").addEventListener("click", () => window.print());
+  </script>
+</body>
+</html>
