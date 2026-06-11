@@ -15,7 +15,8 @@
 </head>
 <body class="plain-mode">
   <div class="cv-actions no-print">
-    <button id="pdf-btn" class="cv-btn">Download as PDF</button>
+    <a class="cv-btn" href="assets/Max_Raulea_CV.pdf" download>Download PDF</a>
+    <button id="print-btn" class="cv-btn cv-btn--ghost">Print</button>
     <a class="cv-btn cv-btn--ghost" href="index.html">View the interactive version →</a>
   </div>
 
@@ -31,7 +32,10 @@
   <script type="module">
     import { renderCV } from "./js/render/plain-cv.js";
     renderCV(document.getElementById("cv"));
-    document.getElementById("pdf-btn").addEventListener("click", () => window.print());
+    // The download link serves assets/Max_Raulea_CV.pdf — a committed,
+    // text-based export of this page. See CLAUDE.md for how to
+    // regenerate it after changing anything in js/content/.
+    document.getElementById("print-btn").addEventListener("click", () => window.print());
   </script>
 </body>
 </html>

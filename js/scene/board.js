@@ -10,9 +10,11 @@ import * as THREE from "three";
 
 // ---- palette --------------------------------------------------
 export const COLORS = {
-  substrate: 0x0a0f1c, // near-black navy
+  substrate: 0x0e1626, // dark blue-grey, like the reference board
   substrateEdge: 0x060a12,
-  trace: 0x123c3a,
+  trace: 0xc9a86a, // gold — exposed copper/ENIG look on a dark board
+  traceBus: 0x123c3a, // dark base under the glowing main-bus trace
+  traceHidden: 0x6e5a33, // dim gold for the U7 hint branch
   traceGlow: 0x3fe0c5, // cyan/teal
   accent: 0xffb454, // warm amber
   pad: 0xc9a86a, // gold-ish
@@ -37,18 +39,26 @@ export const STOPS = [
 
 export const U7_POS = { x: -10.5, z: 30.5 };
 
+// silkscreen title sits beside the main bus so no trace crosses the text
+const TITLE_POS = { x: 6, z: -29 };
+
 const BOARD = { w: 26, l: 70, h: 0.8, top: 0.4 };
 
 // ---------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------
-function silkscreenTexture(text, w = 256, h = 64, size = 34, color = "#bfe9e0") {
+function silkscreenTexture(text, w = 512, h = 128, size = 68, color = "#bfe9e0") {
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
   const ctx = c.getContext("2d");
+  const font = (px) => `bold ${px}px ui-monospace, Menlo, Consolas, monospace`;
+  // shrink long labels to fit instead of clipping at the canvas edge
+  ctx.font = font(size);
+  const tw = ctx.measureText(text).width;
+  if (tw > w - 24) size = Math.floor((size * (w - 24)) / tw);
+  ctx.font = font(size);
   ctx.fillStyle = color;
-  ctx.font = `bold ${size}px ui-monospace, Menlo, Consolas, monospace`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(text, w / 2, h / 2);
@@ -68,6 +78,7 @@ function silkLabel(text, width = 3.2, opacity = 0.85) {
   const geo = new THREE.PlaneGeometry(width, width / 4);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
+  mesh.rotation.z = Math.PI; // text top points +z, upright for the rail cameras
   mesh.position.y = BOARD.top + 0.015;
   return mesh;
 }
@@ -238,8 +249,18 @@ function buildU7() {
   return g;
 }
 
-function buildDecorations(group) {
+function buildDecorations(group, lite) {
   const rng = mulberry32(1337);
+  // shared materials for the warm "powered-on" details
+  const litPadMat = new THREE.MeshStandardMaterial({
+    color: COLORS.pad,
+    emissive: COLORS.accent,
+    emissiveIntensity: 1.1,
+    metalness: 0.6,
+    roughness: 0.4,
+  });
+  const darkPadMat = new THREE.MeshStandardMaterial({ color: COLORS.pad, metalness: 0.8, roughness: 0.35 });
+
   // capacitors
   for (let i = 0; i < 26; i++) {
     const cap = new THREE.Mesh(
@@ -258,15 +279,62 @@ function buildDecorations(group) {
     cap.position.set(x, BOARD.top + 0.35, z);
     group.add(cap);
   }
-  // small resistors / chips
+
+  // small resistors / chips, most with glowing solder caps at the ends
+  const capGeo = new THREE.BoxGeometry(0.13, 0.13, 0.26);
   for (let i = 0; i < 60; i++) {
     const r = box(0.5, 0.12, 0.24, rng() > 0.5 ? 0x1a2236 : 0x222a3e);
     const x = -12 + rng() * 24;
     const z = -32 + rng() * 64;
+    const rotated = rng() > 0.5;
+    const lit = rng() < 0.6;
     if (nearStop(x, z, 3.6)) continue;
     r.position.set(x, BOARD.top + 0.06, z);
-    r.rotation.y = rng() > 0.5 ? Math.PI / 2 : 0;
+    r.rotation.y = rotated ? Math.PI / 2 : 0;
     group.add(r);
+    for (const s of [-1, 1]) {
+      const cap = new THREE.Mesh(capGeo, lit ? litPadMat : darkPadMat);
+      cap.rotation.y = rotated ? 0 : Math.PI / 2;
+      cap.position.set(x + (rotated ? 0 : s * 0.3), BOARD.top + 0.065, z + (rotated ? s * 0.3 : 0));
+      group.add(cap);
+    }
+  }
+
+  // medium QFP-style chips with rows of glowing pins on two sides
+  const pinGeo = new THREE.BoxGeometry(0.1, 0.06, 0.22);
+  for (let i = 0, want = lite ? 4 : 8; i < 20 && want > 0; i++) {
+    const w = 1.2 + rng() * 1.2;
+    const x = -11 + rng() * 22;
+    const z = -31 + rng() * 62;
+    if (nearStop(x, z, 4.0)) continue;
+    want--;
+    const chip = box(w, 0.3, w, COLORS.component, COLORS.traceGlow, 0.04);
+    chip.position.set(x, BOARD.top + 0.15, z);
+    edgeGlow(chip, COLORS.traceGlow, 0.2);
+    group.add(chip);
+    const n = Math.max(3, Math.floor(w / 0.3));
+    const lit = rng() < 0.7;
+    for (let k = 0; k < n; k++) {
+      const off = -((n - 1) * 0.28) / 2 + k * 0.28;
+      for (const s of [-1, 1]) {
+        const pin = new THREE.Mesh(pinGeo, lit && rng() < 0.8 ? litPadMat : darkPadMat);
+        pin.position.set(x + off, BOARD.top + 0.05, z + s * (w / 2 + 0.13));
+        group.add(pin);
+      }
+    }
+  }
+
+  // scattered glowing micro-vias — the "stars" all over the reference board
+  const viaGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.05, 8);
+  const viaLit = new THREE.MeshBasicMaterial({ color: COLORS.accent });
+  for (let i = 0, want = lite ? 22 : 45; i < 120 && want > 0; i++) {
+    const x = -12 + rng() * 24;
+    const z = -32 + rng() * 64;
+    if (nearStop(x, z, 2.8)) continue;
+    want--;
+    const v = new THREE.Mesh(viaGeo, rng() < 0.45 ? viaLit : darkPadMat);
+    v.position.set(x, BOARD.top + 0.03, z);
+    group.add(v);
   }
 }
 
@@ -275,6 +343,7 @@ function nearStop(x, z, d) {
     if (Math.hypot(s.x - x, s.z - z) < d) return true;
   }
   if (Math.hypot(U7_POS.x - x, U7_POS.z - z) < 2.5) return true;
+  if (Math.hypot(TITLE_POS.x - x, TITLE_POS.z - z) < 5.6) return true;
   return false;
 }
 
@@ -305,7 +374,7 @@ function buildTraces(group) {
 
   // decorative branches
   const rng = mulberry32(42);
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 14; i++) {
     const a = pts[Math.floor(rng() * pts.length)];
     const end = new THREE.Vector3(
       THREE.MathUtils.clamp(a.x + (rng() - 0.5) * 16, -12, 12),
@@ -332,23 +401,133 @@ function buildTraces(group) {
   for (let i = 0; i < curves.length; i++) {
     const isMain = i === 0;
     const isU7 = i === curves.length - 1;
-    const tube = new THREE.TubeGeometry(curves[i], isMain ? 200 : 40, isMain ? 0.09 : 0.05, 6, false);
-    const mat = new THREE.MeshStandardMaterial({
-      color: COLORS.trace,
-      emissive: COLORS.traceGlow,
-      emissiveIntensity: isU7 ? 0.08 : isMain ? 0.5 : 0.25,
-      roughness: 0.4,
-      metalness: 0.2,
-    });
+    const tube = new THREE.TubeGeometry(curves[i], isMain ? 200 : 40, isMain ? 0.09 : isU7 ? 0.05 : 0.075, 6, false);
+    // main bus keeps the cyan journey glow; branches are gold metal,
+    // the U7 branch stays deliberately dim
+    const mat = isMain
+      ? new THREE.MeshStandardMaterial({
+          color: COLORS.traceBus,
+          emissive: COLORS.traceGlow,
+          emissiveIntensity: 0.5,
+          roughness: 0.4,
+          metalness: 0.2,
+        })
+      : new THREE.MeshStandardMaterial({
+          color: isU7 ? COLORS.traceHidden : COLORS.trace,
+          emissive: COLORS.accent,
+          emissiveIntensity: isU7 ? 0.03 : 0.18,
+          roughness: 0.35,
+          metalness: 0.75,
+        });
     group.add(new THREE.Mesh(tube, mat));
+  }
+
+  // gold vias where branches start and end — sells the hand-routed look
+  // (main bus and the U7 hint branch deliberately get none)
+  const viaGeo = new THREE.CylinderGeometry(0.13, 0.13, 0.05, 10);
+  const viaMat = new THREE.MeshStandardMaterial({ color: COLORS.pad, metalness: 0.8, roughness: 0.35 });
+  for (let i = 1; i < curves.length - 1; i++) {
+    for (const t of [0, 1]) {
+      const p = curves[i].getPoint(t);
+      const via = new THREE.Mesh(viaGeo, viaMat);
+      via.position.set(p.x, BOARD.top + 0.03, p.z);
+      group.add(via);
+    }
   }
   return curves;
 }
 
 // ---------------------------------------------------------------
+// scatter traces — dense decorative copper routing with 45° bends,
+// like real PCB autorouting. Static (no pulses), gold, glowing
+// solder dots at the endpoints.
+// ---------------------------------------------------------------
+function rot45(dir, turn) {
+  const c = Math.SQRT1_2;
+  return [dir[0] * c - turn * dir[1] * c, turn * dir[0] * c + dir[1] * c];
+}
+
+// walk 2–4 segments from a random start, turning ±45° between them
+function routedPath(rng) {
+  let x = -12 + rng() * 24;
+  let z = -32 + rng() * 64;
+  if (nearStop(x, z, 3.2)) return null;
+  let dir = [[1, 0], [-1, 0], [0, 1], [0, -1]][(rng() * 4) | 0];
+  const pts = [[x, z]];
+  const nseg = 2 + ((rng() * 3) | 0);
+  for (let s = 0; s < nseg; s++) {
+    const len = 1.4 + rng() * 3.8;
+    x += dir[0] * len;
+    z += dir[1] * len;
+    if (x < -12.4 || x > 12.4 || z < -32.4 || z > 32.4 || nearStop(x, z, 3.2)) break;
+    pts.push([x, z]);
+    dir = rot45(dir, rng() < 0.5 ? 1 : -1);
+  }
+  return pts.length >= 3 ? pts : null;
+}
+
+// offset a polyline sideways (xz plane) — used for parallel bus bundles
+function offsetPath(pts, d) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const prev = pts[Math.max(0, i - 1)];
+    const next = pts[Math.min(pts.length - 1, i + 1)];
+    const tx = next[0] - prev[0];
+    const tz = next[1] - prev[1];
+    const len = Math.hypot(tx, tz) || 1;
+    out.push([pts[i][0] - (tz / len) * d, pts[i][1] + (tx / len) * d]);
+  }
+  return out;
+}
+
+function buildScatterTraces(group, lite) {
+  const rng = mulberry32(7);
+  const traceMat = new THREE.MeshStandardMaterial({
+    color: COLORS.trace,
+    emissive: COLORS.accent,
+    emissiveIntensity: 0.22,
+    roughness: 0.35,
+    metalness: 0.75,
+  });
+  const dotGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.05, 8);
+  const dotBright = new THREE.MeshBasicMaterial({ color: COLORS.accent });
+  const dotDim = new THREE.MeshStandardMaterial({ color: COLORS.pad, metalness: 0.8, roughness: 0.35 });
+
+  const addTube = (pts2d, radius) => {
+    const v = pts2d.map(([x, z]) => new THREE.Vector3(x, BOARD.top + 0.03, z));
+    const curve = new THREE.CatmullRomCurve3(v, false, "catmullrom", 0.02);
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, v.length * 8, radius, 5, false), traceMat));
+  };
+  const addDot = ([x, z], bright) => {
+    const m = new THREE.Mesh(dotGeo, bright ? dotBright : dotDim);
+    m.position.set(x, BOARD.top + 0.04, z);
+    group.add(m);
+  };
+
+  const maxSingle = lite ? 26 : 52;
+  const maxBundles = lite ? 3 : 6;
+  let single = 0;
+  let bundles = 0;
+  for (let tries = 0; tries < 400 && (single < maxSingle || bundles < maxBundles); tries++) {
+    const path = routedPath(rng);
+    if (!path) continue;
+    if (bundles < maxBundles && rng() < 0.18) {
+      // bus bundle: a few parallel lanes
+      for (const lane of [-0.2, 0, 0.2]) addTube(lane ? offsetPath(path, lane) : path, 0.035);
+      bundles++;
+    } else if (single < maxSingle) {
+      addTube(path, 0.04);
+      single++;
+    } else continue;
+    addDot(path[0], rng() < 0.45);
+    addDot(path[path.length - 1], rng() < 0.45);
+  }
+}
+
+// ---------------------------------------------------------------
 // main entry
 // ---------------------------------------------------------------
-export function buildBoard() {
+export function buildBoard({ mobile = false } = {}) {
   const group = new THREE.Group();
 
   // substrate
@@ -359,11 +538,11 @@ export function buildBoard() {
   group.add(sub);
   edgeGlow(sub, COLORS.traceGlow, 0.25);
 
-  // faint grid on top
-  const grid = new THREE.GridHelper(64, 64, 0x16313a, 0x0d1b22);
+  // faint grid on top — warm gold-grey, like unplated copper hatching
+  const grid = new THREE.GridHelper(64, 64, 0x4a3d26, 0x2a2316);
   grid.position.y = BOARD.top + 0.005;
   grid.material.transparent = true;
-  grid.material.opacity = 0.22;
+  grid.material.opacity = 0.3;
   group.add(grid);
 
   // mounting holes
@@ -378,6 +557,7 @@ export function buildBoard() {
   }
 
   const traceCurves = buildTraces(group);
+  buildScatterTraces(group, mobile);
 
   // components at stops
   const builders = {
@@ -411,14 +591,11 @@ export function buildBoard() {
   group.add(u7);
 
   // board silkscreen title
-  const title = silkLabel("MAX RAULEA · REV 2.6", 9, 0.55);
-  title.position.set(-6.5, BOARD.top + 0.02, -29);
+  const title = silkLabel("PORTFOLIO · MAX RAULEA", 10, 0.6);
+  title.position.set(TITLE_POS.x, BOARD.top + 0.02, TITLE_POS.z);
   group.add(title);
-  const sub2 = silkLabel("VU.NL — COMPUTER SECURITY", 7, 0.3);
-  sub2.position.set(-7.2, BOARD.top + 0.02, -27.6);
-  group.add(sub2);
 
-  buildDecorations(group);
+  buildDecorations(group, mobile);
 
   return { group, traceCurves, componentGroups, u7 };
 }
