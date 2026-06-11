@@ -7,7 +7,7 @@
 import * as THREE from "three";
 import { buildBoard, STOPS, U7_POS } from "./scene/board.js";
 import { CameraRail } from "./scene/camera-rail.js";
-import { initLighting, initPulses } from "./scene/effects.js";
+import { initLighting, initPulses, initPostFX } from "./scene/effects.js";
 import { showPanel, hidePanel, isOpenFor, showEasterEgg } from "./render/terminal.js";
 
 const gsap = window.gsap;
@@ -26,10 +26,11 @@ scene.background = new THREE.Color(0x05070c);
 
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
 
-const { group: board, traceCurves, u7 } = buildBoard();
+const { group: board, traceCurves, u7 } = buildBoard({ mobile: isMobile });
 scene.add(board);
 initLighting(scene);
 const updatePulses = initPulses(scene, traceCurves, { mobile: isMobile, reducedMotion });
+const composer = initPostFX(renderer, scene, camera, { mobile: isMobile });
 
 const rail = new CameraRail(camera, { reducedMotion });
 
@@ -212,6 +213,7 @@ window.addEventListener("resize", () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  if (composer) composer.setSize(window.innerWidth, window.innerHeight);
 });
 
 let hidden = false;
@@ -250,6 +252,7 @@ function loop() {
     }
   }
 
-  renderer.render(scene, camera);
+  if (composer) composer.render();
+  else renderer.render(scene, camera);
 }
 loop();

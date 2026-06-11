@@ -4,7 +4,29 @@
 // ============================================================
 
 import * as THREE from "three";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { COLORS } from "./board.js";
+
+// subtle bloom so the emissive traces, pads and pulses get the glow
+// halos of a real lit board. Desktop only — mobile keeps the plain
+// renderer for performance.
+export function initPostFX(renderer, scene, camera, { mobile = false } = {}) {
+  if (mobile) return null;
+  const rt = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+    samples: 4,
+    type: THREE.HalfFloatType,
+  });
+  const composer = new EffectComposer(renderer, rt);
+  composer.addPass(new RenderPass(scene, camera));
+  composer.addPass(
+    new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.45, 0.6)
+  );
+  composer.addPass(new OutputPass());
+  return composer;
+}
 
 export function initLighting(scene) {
   scene.fog = new THREE.FogExp2(0x05070c, 0.008);
@@ -34,8 +56,10 @@ export function initPulses(scene, curves, { mobile = false, reducedMotion = fals
   curves.forEach((curve, ci) => {
     const n = ci === 0 ? (mobile ? 3 : 5) : perCurve; // more on the main bus
     for (let i = 0; i < n; i++) {
+      // main bus pulses stay cyan (the journey line); branch pulses run warm
+      const cyanChance = ci === 0 ? 0.85 : 0.35;
       const mat = new THREE.MeshBasicMaterial({
-        color: Math.random() < 0.85 ? COLORS.traceGlow : COLORS.accent,
+        color: Math.random() < cyanChance ? COLORS.traceGlow : COLORS.accent,
         transparent: true,
         opacity: 0.9,
       });
