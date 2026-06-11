@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Max Răulea — Computer Security · Interactive PCB Portfolio</title>
+  <meta name="description" content="Portfolio of Max Răulea, MSc Computer Security student at VU Amsterdam — explore it as an interactive circuit board. Low-level programming, embedded C, CTF.">
+  <meta property="og:title" content="Max Răulea — Computer Security Portfolio">
+  <meta property="og:description" content="An interactive PCB you scroll across. Hidden flag included — if you can find it.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="assets/og-image.png">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="stylesheet" href="css/main.css">
+  <script>
+    // No WebGL? Go straight to the plain version instead of a black screen.
+    (function () {
+      try {
+        var c = document.createElement("canvas");
+        var gl = c.getContext("webgl2") || c.getContext("webgl");
+        if (!gl) location.replace("plain.html");
+      } catch (e) {
+        location.replace("plain.html");
+      }
+    })();
+  </script>
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+</head>
+<body class="pcb-mode">
+  <a class="skip-link" href="plain.html">Skip the 3D experience — plain version</a>
+
+  <canvas id="scene" aria-label="Interactive circuit board. Scroll to travel across the board; each component opens a section of the portfolio."></canvas>
+
+  <!-- boot / loading overlay -->
+  <div id="boot" aria-hidden="true">
+    <pre id="boot-log"></pre>
+  </div>
+
+  <!-- scroll affordance -->
+  <div id="scroll-hint" aria-hidden="true">
+    <span>scroll</span>
+    <span class="chev">▼</span>
+  </div>
+
+  <!-- end-of-rail halt screen -->
+  <div id="halt" aria-hidden="true">
+    <pre>system halted.</pre>
+    <button id="reboot" class="t-btn">reboot ⏎ back to top</button>
+  </div>
+
+  <!-- silkscreen progress indicator -->
+  <nav id="rail-nav" aria-label="Sections"></nav>
+
+  <!-- corner links + attribution -->
+  <div id="corner-links">
+    <a href="plain.html">plain version / PDF CV</a>
+  </div>
+  <div id="attribution" aria-label="Site credits">
+    DESIGNED &amp; DIRECTED BY MAX RĂULEA · FABRICATED WITH CLAUDE FABLE 5
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

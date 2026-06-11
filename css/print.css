@@ -1,0 +1,33 @@
+/* ============================================================
+   print.css — formats plain.html for A4 when "Download as PDF"
+   triggers window.print(). Text-based output, ATS-friendly.
+   ============================================================ */
+
+@page {
+  size: A4;
+  margin: 16mm 17mm;
+}
+
+body.plain-mode {
+  background: #fff;
+  color: #000;
+  padding: 0;
+  font-size: 10.5pt;
+}
+
+/* hide on-screen chrome — including the AI attribution footer,
+   so the exported CV stays purely about the person */
+.no-print { display: none !important; }
+
+.cv { max-width: none; margin: 0; }
+
+.cv-header { border-color: #000; }
+.cv-photo { width: 26mm; height: 26mm; }
+
+.cv h2 { color: #000; border-color: #999; }
+.cv-meta, .cv-period { color: #333; }
+.cv a { color: #000; text-decoration: none; }
+
+/* sensible page breaks */
+.cv-entry, .cv-header { break-inside: avoid; }
+.cv h2 { break-after: avoid; }
