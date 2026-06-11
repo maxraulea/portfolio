@@ -12,7 +12,9 @@ import * as THREE from "three";
 export const COLORS = {
   substrate: 0x0a0f1c, // near-black navy
   substrateEdge: 0x060a12,
-  trace: 0x123c3a,
+  trace: 0xc9a86a, // gold — exposed copper/ENIG look on a dark board
+  traceBus: 0x123c3a, // dark base under the glowing main-bus trace
+  traceHidden: 0x6e5a33, // dim gold for the U7 hint branch
   traceGlow: 0x3fe0c5, // cyan/teal
   accent: 0xffb454, // warm amber
   pad: 0xc9a86a, // gold-ish
@@ -42,13 +44,18 @@ const BOARD = { w: 26, l: 70, h: 0.8, top: 0.4 };
 // ---------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------
-function silkscreenTexture(text, w = 256, h = 64, size = 34, color = "#bfe9e0") {
+function silkscreenTexture(text, w = 512, h = 128, size = 68, color = "#bfe9e0") {
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
   const ctx = c.getContext("2d");
+  const font = (px) => `bold ${px}px ui-monospace, Menlo, Consolas, monospace`;
+  // shrink long labels to fit instead of clipping at the canvas edge
+  ctx.font = font(size);
+  const tw = ctx.measureText(text).width;
+  if (tw > w - 24) size = Math.floor((size * (w - 24)) / tw);
+  ctx.font = font(size);
   ctx.fillStyle = color;
-  ctx.font = `bold ${size}px ui-monospace, Menlo, Consolas, monospace`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(text, w / 2, h / 2);
@@ -68,6 +75,7 @@ function silkLabel(text, width = 3.2, opacity = 0.85) {
   const geo = new THREE.PlaneGeometry(width, width / 4);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
+  mesh.rotation.z = Math.PI; // text top points +z, upright for the rail cameras
   mesh.position.y = BOARD.top + 0.015;
   return mesh;
 }
@@ -305,7 +313,7 @@ function buildTraces(group) {
 
   // decorative branches
   const rng = mulberry32(42);
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 14; i++) {
     const a = pts[Math.floor(rng() * pts.length)];
     const end = new THREE.Vector3(
       THREE.MathUtils.clamp(a.x + (rng() - 0.5) * 16, -12, 12),
@@ -314,6 +322,19 @@ function buildTraces(group) {
     );
     const mid = new THREE.Vector3(end.x, BOARD.top + 0.03, a.z); // 90° style bend
     curves.push(new THREE.CatmullRomCurve3([a.clone(), mid, end], false, "catmullrom", 0.05));
+  }
+  // short free-floating traces scattered across the board, to fill the
+  // empty stretches between stops
+  for (let i = 0; i < 20; i++) {
+    const a = new THREE.Vector3(-12 + rng() * 24, BOARD.top + 0.03, -32 + rng() * 64);
+    const end = new THREE.Vector3(
+      THREE.MathUtils.clamp(a.x + (rng() - 0.5) * 12, -12, 12),
+      BOARD.top + 0.03,
+      THREE.MathUtils.clamp(a.z + (rng() - 0.5) * 16, -31, 31)
+    );
+    if (nearStop(a.x, a.z, 3.4) || nearStop(end.x, end.z, 3.4)) continue;
+    const mid = new THREE.Vector3(end.x, BOARD.top + 0.03, a.z);
+    curves.push(new THREE.CatmullRomCurve3([a, mid, end], false, "catmullrom", 0.05));
   }
   // one faint branch sneaks toward U7 — the only hint it exists
   curves.push(
@@ -332,15 +353,38 @@ function buildTraces(group) {
   for (let i = 0; i < curves.length; i++) {
     const isMain = i === 0;
     const isU7 = i === curves.length - 1;
-    const tube = new THREE.TubeGeometry(curves[i], isMain ? 200 : 40, isMain ? 0.09 : 0.05, 6, false);
-    const mat = new THREE.MeshStandardMaterial({
-      color: COLORS.trace,
-      emissive: COLORS.traceGlow,
-      emissiveIntensity: isU7 ? 0.08 : isMain ? 0.5 : 0.25,
-      roughness: 0.4,
-      metalness: 0.2,
-    });
+    const tube = new THREE.TubeGeometry(curves[i], isMain ? 200 : 40, isMain ? 0.09 : isU7 ? 0.05 : 0.075, 6, false);
+    // main bus keeps the cyan journey glow; branches are gold metal,
+    // the U7 branch stays deliberately dim
+    const mat = isMain
+      ? new THREE.MeshStandardMaterial({
+          color: COLORS.traceBus,
+          emissive: COLORS.traceGlow,
+          emissiveIntensity: 0.5,
+          roughness: 0.4,
+          metalness: 0.2,
+        })
+      : new THREE.MeshStandardMaterial({
+          color: isU7 ? COLORS.traceHidden : COLORS.trace,
+          emissive: COLORS.accent,
+          emissiveIntensity: isU7 ? 0.03 : 0.18,
+          roughness: 0.35,
+          metalness: 0.75,
+        });
     group.add(new THREE.Mesh(tube, mat));
+  }
+
+  // gold vias where branches start and end — sells the hand-routed look
+  // (main bus and the U7 hint branch deliberately get none)
+  const viaGeo = new THREE.CylinderGeometry(0.13, 0.13, 0.05, 10);
+  const viaMat = new THREE.MeshStandardMaterial({ color: COLORS.pad, metalness: 0.8, roughness: 0.35 });
+  for (let i = 1; i < curves.length - 1; i++) {
+    for (const t of [0, 1]) {
+      const p = curves[i].getPoint(t);
+      const via = new THREE.Mesh(viaGeo, viaMat);
+      via.position.set(p.x, BOARD.top + 0.03, p.z);
+      group.add(via);
+    }
   }
   return curves;
 }
@@ -359,11 +403,11 @@ export function buildBoard() {
   group.add(sub);
   edgeGlow(sub, COLORS.traceGlow, 0.25);
 
-  // faint grid on top
-  const grid = new THREE.GridHelper(64, 64, 0x16313a, 0x0d1b22);
+  // faint grid on top — warm gold-grey, like unplated copper hatching
+  const grid = new THREE.GridHelper(64, 64, 0x4a3d26, 0x2a2316);
   grid.position.y = BOARD.top + 0.005;
   grid.material.transparent = true;
-  grid.material.opacity = 0.22;
+  grid.material.opacity = 0.3;
   group.add(grid);
 
   // mounting holes
@@ -411,12 +455,9 @@ export function buildBoard() {
   group.add(u7);
 
   // board silkscreen title
-  const title = silkLabel("MAX RAULEA · REV 2.6", 9, 0.55);
-  title.position.set(-6.5, BOARD.top + 0.02, -29);
+  const title = silkLabel("PORTFOLIO · MAX RAULEA", 10, 0.6);
+  title.position.set(0, BOARD.top + 0.02, -29);
   group.add(title);
-  const sub2 = silkLabel("VU.NL — COMPUTER SECURITY", 7, 0.3);
-  sub2.position.set(-7.2, BOARD.top + 0.02, -27.6);
-  group.add(sub2);
 
   buildDecorations(group);
 

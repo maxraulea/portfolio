@@ -129,10 +129,11 @@ body.pcb-mode {
 /* ---- silkscreen progress nav ---- */
 #rail-nav {
   position: fixed;
-  right: 1.1rem;
+  /* left side — the terminal panel lives on the right and must never block it */
+  left: 1.1rem;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 20;
+  z-index: 40;
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
@@ -158,7 +159,13 @@ body.pcb-mode {
   flex: 0 0 auto;
   transition: all 0.25s;
 }
-.rail-label { opacity: 0; transform: translateX(6px); transition: all 0.25s; white-space: nowrap; }
+.rail-label {
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: all 0.25s;
+  white-space: nowrap;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
+}
 .rail-nav-item:hover .rail-label,
 .rail-nav-item:focus-visible .rail-label,
 .rail-nav-item.active .rail-label { opacity: 1; transform: none; }
@@ -343,7 +350,7 @@ body.pcb-mode {
   .panel-body { font-size: 0.92rem; padding: 0.9rem; }
   .panel-hint { display: none; }
 
-  #rail-nav { right: 0.55rem; gap: 0.75rem; }
+  #rail-nav { left: 0.55rem; gap: 0.75rem; }
   .rail-label { display: none; }
 
   #corner-links { top: 0.6rem; right: 0.7rem; }

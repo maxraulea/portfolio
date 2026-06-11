@@ -7,14 +7,14 @@ import * as THREE from "three";
 import { COLORS } from "./board.js";
 
 export function initLighting(scene) {
-  scene.fog = new THREE.FogExp2(0x05070c, 0.012);
-  scene.add(new THREE.AmbientLight(0x223344, 1.4));
+  scene.fog = new THREE.FogExp2(0x05070c, 0.008);
+  scene.add(new THREE.AmbientLight(0x55687c, 1.9));
 
-  const key = new THREE.DirectionalLight(0x9fd8d0, 1.1);
+  const key = new THREE.DirectionalLight(0xbfe3dc, 1.7);
   key.position.set(8, 24, -10);
   scene.add(key);
 
-  const fill = new THREE.DirectionalLight(0x335566, 0.5);
+  const fill = new THREE.DirectionalLight(0x4a6a80, 0.8);
   fill.position.set(-12, 14, 20);
   scene.add(fill);
 

@@ -67,6 +67,14 @@ files only; deployable to GitHub Pages as-is.
   into HTML (content files are data, not trusted markup).
 - Test locally with `python3 -m http.server` — ES modules don't run over
   `file://`.
+- `assets/Max_Raulea_CV.pdf` is a committed, text-based export of
+  `plain.html` (the "Download PDF" button is a plain link to it; nothing
+  runs server-side). After changing anything in `js/content/`, regenerate
+  it by hand: serve the repo (`python3 -m http.server 8123`), then run
+  Chrome locally:
+  `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+    --headless=new --no-pdf-header-footer --virtual-time-budget=8000 \
+    --print-to-pdf=assets/Max_Raulea_CV.pdf http://localhost:8123/plain.html`
 
 ## Known TODOs (owner action, not yours unless asked)
 
